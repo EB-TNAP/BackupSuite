@@ -1,5 +1,5 @@
 #     FULL BACKUP UYILITY FOR ENIGMA2/OPENVISION, SUPPORTS VARIOUS MODELS     #
-#                    MAKES A FULLBACKUP READY FOR FLASHING.                   #
+#                   MAKES A FULLBACK-UP READY FOR FLASHING.                   #
 #                                                                             #
 ###############################################################################
 #
@@ -83,10 +83,10 @@ $SHOW "message15" 2>&1 | tee -a $LOGFILE # Image creation FAILED!
 echo $WHITE
 exit 0
 }
-############################ DEFINE IMAGE VERSION #############################
+############################ DEFINE IMAGE_VERSION #############################
 image_version()
 {
-echo "Backup = $BACKUPDATE"
+echo "Back-up = $BACKUPDATE"
 echo "Version = $IMVER"
 echo "Flashed = $FLASHED"
 echo "Updated = $LASTUPDATE"
@@ -118,7 +118,7 @@ elif [ ! -x "$1" ] ; then
 	big_fail
 fi
 }
-################### BACKUP MADE AND REPORTING SIZE ETC. #######################
+################### BACK-UP MADE AND REPORTING SIZE ETC. ######################
 backup_made()
 {
 {
@@ -140,7 +140,7 @@ fi
 ############################## END PROGRAM BLOCKS #############################
 ########################## DECLARATION OF VARIABLES ###########################
 BACKUPDATE=`date +%Y.%m.%d_%H:%M`
-DATE=`date +%Y%m%d_%H%M`
+DATE="tnap-4-"`date +%Y%m%d_%H%M`
 if [ -f "$LIBDIR/enigma2/python/Plugins/Extensions/BackupSuite/speed.txt" ] ; then
 	ESTSPEED=`cat $LIBDIR/enigma2/python/Plugins/Extensions/BackupSuite/speed.txt`
 	if [ $ESTSPEED -lt 50 ] ; then
@@ -157,8 +157,15 @@ ENIGMA2DATE=`cat /tmp/enigma2version`
 LOGFILE=/tmp/BackupSuite.log
 MEDIA="$1"
 MKFS=/usr/sbin/mkfs.ubifs
+MTDPLACE=`cat /proc/mtd | grep -w "kernel" | cut -d ":" -f 1`
 NANDDUMP=/usr/sbin/nanddump
 START=$(date +%s)
+if [ -f "/etc/lookuptable.txt" ] ; then
+	LOOKUP="/etc/lookuptable.txt"
+	$SHOW "message36"
+else
+	LOOKUP="$LIBDIR/enigma2/python/Plugins/Extensions/BackupSuite/lookuptable.txt"
+fi
 TARGET="XX"
 UBINIZE=/usr/sbin/ubinize
 USEDsizebytes=`df -B 1 /usr/ | grep [0-9]% | tr -s " " | cut -d " " -f 3`
@@ -175,7 +182,7 @@ log "*** THIS BACKUP IS CREATED WITH THE BACKUPSUITE PLUGIN ***"
 log "*****  https://github.com/OpenVisionE2/BackupSuite  ******"
 log $LINE
 log "Plugin version     = "`cat /var/lib/opkg/info/enigma2-plugin-extensions-backupsuite.control | grep "Version: " | cut -d "+" -f 2- | cut -d "-" -f1`
-log "Backup media      = $MEDIA"
+log "Back-up media      = $MEDIA"
 df -h "$MEDIA"  >> $LOGFILE
 log $LINE
 image_version >> $LOGFILE
@@ -187,7 +194,7 @@ checkbinary $MKFS
 checkbinary $UBINIZE
 echo -n $WHITE
 #############################################################################
-# TEST IF RECEIVER IS SUPPORTED #
+# TEST IF RECEIVER IS SUPPORTED AND READ THE VARIABLES FROM THE LOOKUPTABLE #
 if [ -f /etc/modules-load.d/dreambox-dvb-modules-dm*.conf ] || [ -f /etc/modules-load.d/10-dreambox-dvb-modules-dm*.conf ] ; then
 	log "It's a dreambox! Not compatible with this script."
 	exit 1
@@ -195,70 +202,65 @@ else
 	if [ -f /etc/openvision/model ] ; then
 		log "Thanks GOD it's Open Vision"
 		SEARCH=$( cat /etc/openvision/model )
-		log "Model: $SEARCH"
-		PLATFORM=$( cat /etc/openvision/platform )
-		log "Platform: $PLATFORM"
-		KERNELNAME=$( cat /etc/openvision/kernelfile )
-		log "Kernel file: $KERNELNAME"
-		MKUBIFS_ARGS=$( cat /etc/openvision/mkubifs )
-		log "MKUBIFS: $MKUBIFS_ARGS"
-		UBINIZE_ARGS=$( cat /etc/openvision/ubinize )
-		log "UBINIZE: $UBINIZE_ARGS"
-		ROOTNAME=$( cat /etc/openvision/rootfile )
-		log "Root file: $ROOTNAME"
-		ACTION=$( cat /etc/openvision/forcemode )
-		log "Force: $ACTION"
-		FOLDER=/$( cat /etc/openvision/imagedir )
-		log "Image folder: $FOLDER"
-		SHOWNAME=$( cat /etc/openvision/brand )
-		log "Brand: $SHOWNAME"
-		MTDPLACE=$( cat /etc/openvision/mtdkernel )
-		log "MTD kernel: $MTDPLACE"
-		ARCHITECTURE=$( cat /etc/openvision/architecture )
-		log "Architecture: $ARCHITECTURE"
-		SHORTARCH=$( echo "$ARCHITECTURE" | cut -c1-3 )
-		SOCFAMILY=$( cat /etc/openvision/socfamily )
-		log "SoC family: $SOCFAMILY"
-		SHORTSOC=$( echo "$SOCFAMILY" | cut -c1-4 )
 	else
-		echo $RED
-		$SHOW "message01" 2>&1 | tee -a $LOGFILE # No supported receiver found!
-		big_fail
+		log "Not Open Vision, OpenPLi or SatDreamGr maybe?"	
+		if [ -f /proc/stb/info/hwmodel ] ; then
+			SEARCH=$( cat /proc/stb/info/hwmodel )
+		elif [ -f /proc/stb/info/gbmodel ] ; then
+			SEARCH=$( cat /proc/stb/info/gbmodel )
+		elif [ -f /proc/stb/info/boxtype ] ; then
+			SEARCH=$( cat /proc/stb/info/boxtype )
+		elif [ -f /proc/stb/info/vumodel ] ; then
+			SEARCH=$( cat /proc/stb/info/vumodel )
+		else
+			echo $RED
+			$SHOW "message01" 2>&1 | tee -a $LOGFILE # No supported receiver found!
+			big_fail
+		fi
 	fi
 fi
-
-EXTR1="/fullbackup_$SEARCH/$DATE"
-EXTRA="$MEDIA$EXTR1$FOLDER"
-if  [ $HARDDISK = 1 ]; then
-	MAINDEST="$MEDIA$EXTR1$FOLDER"
-	mkdir -p "$MAINDEST"
-	log "Created directory  = $MAINDEST"
+cat $LOOKUP | cut -f 2 | grep -qw "$SEARCH"
+if [ "$?" = "1" ] ; then
+	echo $RED
+	$SHOW "message01" 2>&1 | tee -a $LOGFILE # No supported receiver found!
+	big_fail
 else
-	MAINDEST="$MEDIA$FOLDER"
-	mkdir -p "$MAINDEST"
-	log "Created directory  = $MAINDEST"
-fi
-
-if [ $ROOTNAME = "rootfs.tar.bz2" ] ; then
-	MKFS=/bin/tar
-	checkbinary $MKFS
-	BZIP2=/usr/bin/bzip2
-	if [ ! -f "$BZIP2" ] ; then
-		echo "$BZIP2 " ; $SHOW "message38"
-		opkg update > /dev/null 2>&1
-		opkg install bzip2 > /dev/null 2>&1
+	MODEL=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 2`
+	SHOWNAME=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 3`
+	FOLDER="`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 4`"
+	EXTR1="`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 5`/$DATE"
+	EXTR2="`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 6`"
+	EXTRA="$MEDIA$EXTR1$EXTR2"
+	if  [ $HARDDISK = 1 ]; then
+		MAINDEST="$MEDIA$EXTR1$FOLDER"
+	else
+		MAINDEST="$MEDIA$FOLDER"
+	fi
+	MKUBIFS_ARGS=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 7`
+	UBINIZE_ARGS=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 8`
+	ROOTNAME=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 9`
+	KERNELNAME=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 10`
+	ACTION=`cat $LOOKUP | grep -w -m1 "$SEARCH" | cut -f 11`
+	if [ $ROOTNAME = "rootfs.tar.bz2" ] ; then
+		MKFS=/bin/tar
 		checkbinary $MKFS
+		BZIP2=/usr/bin/bzip2
+		if [ ! -f "$BZIP2" ] ; then
+			echo "$BZIP2 " ; $SHOW "message38"
+			opkg update > /dev/null 2>&1
+			opkg install bzip2 > /dev/null 2>&1
+			checkbinary $MKFS
+		fi
 	fi
 fi
-
 log "Destination        = $MAINDEST"
 log $LINE
 ############# START TO SHOW SOME INFORMATION ABOUT BRAND & MODEL ##############
 echo -n $PURPLE
-echo -n "$SHOWNAME $SEARCH " | tr  a-z A-Z		# Shows the receiver brand and model
-$SHOW "message02"  			# BACKUP TOOL FOR MAKING A COMPLETE BACKUP
+echo -n "$SHOWNAME " | tr  a-z A-Z		# Shows the receiver brand and model
+$SHOW "message02"  			# BACK-UP TOOL FOR MAKING A COMPLETE BACK-UP
 echo $BLUE
-log "RECEIVER = $SHOWNAME $SEARCH "
+log "RECEIVER = $SHOWNAME "
 log "MKUBIFS_ARGS = $MKUBIFS_ARGS"
 log "UBINIZE_ARGS = $UBINIZE_ARGS"
 echo "$VERSION"
@@ -291,19 +293,15 @@ echo $LINE
 $SHOW "message03"  ; printf "%d.%02d " $ESTMINUTES $ESTSECONDS ; $SHOW "message25" # estimated time in minutes 
 echo $LINE
 } 2>&1 | tee -a $LOGFILE
-####### WARNING IF THE IMAGESIZE GETS TOO BIG TO RESTORE ########
-if [ -f /etc/openvision/smallflash ] ; then
-	if [ $MEGABYTES -gt 62 ] ; then
-	echo -n $RED
+####### WARNING IF THE IMAGESIZE OF THE XTRENDS GETS TOO BIG TO RESTORE ########
+if [ ${MODEL:0:2} = "et" -a ${MODEL:0:3} != "et8" -a ${MODEL:0:3} != "et1" -a ${MODEL:0:3} != "et7" ] ; then
+	if [ $MEGABYTES -gt 120 ] ; then
+    echo -n $RED
 	$SHOW "message28" 2>&1 | tee -a $LOGFILE #Image probably too big to restore
 	echo $WHITE
-	fi
-fi
-
-if [ -f /etc/openvision/middleflash ] ; then
-	if [ $MEGABYTES -gt 94 ] ; then
-	echo -n $RED
-	$SHOW "message28" 2>&1 | tee -a $LOGFILE #Image probably too big to restore
+	elif [ $MEGABYTES -gt 110 ] ; then
+	echo -n $YELLOW
+	$SHOW "message29" 2>&1 | tee -a $LOGFILE #Image between 111 and 120MB could cause problems
 	echo $WHITE
 	fi
 fi
@@ -326,8 +324,8 @@ mount --bind / /tmp/bi/root # the complete root at /tmp/bi/root
 if [ -d /tmp/bi/root/var/lib/samba/private/msg.sock ] ; then
 	rm -rf /tmp/bi/root/var/lib/samba/private/msg.sock
 fi
-####################### START THE REAL BACKUP PROCESS ########################
-############################# MAKING UBINIZE.CFG #############################
+####################### START THE REAL BACK-UP PROCESS ########################
+############################# MAKING UBINIZE.CFG ##############################
 if [ $ROOTNAME != "rootfs.tar.bz2" ] ; then
 	echo \[ubifs\] > "$WORKDIR/ubinize.cfg"
 	echo mode=ubi >> "$WORKDIR/ubinize.cfg"
@@ -346,18 +344,49 @@ fi
 ############################## MAKING KERNELDUMP ##############################
 log $LINE
 $SHOW "message07" 2>&1 | tee -a $LOGFILE			# Create: kerneldump
-log "Kernel resides on /dev/$MTDPLACE" 					# Just for testing purposes
-if [ $SHORTARCH = "cor" -o $SHORTARCH = "arm" -o $SHORTARCH = "aar" ] ; then
-	dd if=/dev/$MTDPLACE of=$WORKDIR/$KERNELNAME
+if [ $ROOTNAME != "rootfs.tar.bz2" -o $SEARCH = "h9" -o $SEARCH = "h9combo" -o $SEARCH = "i55plus" -o $SEARCH = "h10" ] ; then
+	log "Kernel resides on $MTDPLACE" 					# Just for testing purposes
+	$NANDDUMP /dev/$MTDPLACE -qf "$WORKDIR/$KERNELNAME"
+	if [ -f "$WORKDIR/$KERNELNAME" ] ; then
+		echo -n "Kernel dumped  :"  >> $LOGFILE
+		ls $LS1 "$WORKDIR/$KERNELNAME" | sed 's/-r.*   1//' >> $LOGFILE
+	else
+		log "$WORKDIR/$KERNELNAME NOT FOUND"
+		big_fail
+	fi
+	log "--------------------------"
 else
-	$NANDDUMP /dev/$MTDPLACE -qf "$WORKDIR/$KERNELNAME"	
-fi
-if [ -f "$WORKDIR/$KERNELNAME" ] ; then
-	echo -n "Kernel dumped  :"  >> $LOGFILE
-	ls $LS1 "$WORKDIR/$KERNELNAME" | sed 's/-r.*   1//' >> $LOGFILE
-else
-	log "$WORKDIR/$KERNELNAME NOT FOUND"
-	big_fail
+	if [ $SEARCH = "solo4k" -o $SEARCH = "vusolo4k" -o $SEARCH = "ultimo4k" -o $SEARCH = "vuultimo4k" -o $SEARCH = "uno4k" -o $SEARCH = "vuuno4k" -o $SEARCH = "uno4kse" -o $SEARCH = "vuuno4kse" -o $SEARCH = "lunix3-4k" -o $SEARCH = "lunix34k" -o $SEARCH = "lunix4k" ] ; then
+		dd if=/dev/mmcblk0p1 of=$WORKDIR/$KERNELNAME
+		log "Kernel resides on /dev/mmcblk0p1"
+	elif [ $SEARCH = "h7" ] ; then
+		dd if=/dev/mmcblk0p2 of=$WORKDIR/$KERNELNAME
+		log "Kernel resides on /dev/mmcblk0p2"
+	elif [ $SEARCH = "sf4008" -o $SEARCH = "et11000" ] ; then
+		dd if=/dev/mmcblk0p3 of=$WORKDIR/$KERNELNAME
+		log "Kernel resides on /dev/mmcblk0p3"
+	elif [ $SEARCH = "zero4k" -o $SEARCH = "vuzero4k" -o $SEARCH = "gbquad4k" -o $SEARCH = "gbue4k" -o $SEARCH = "gbx34k" ] ; then
+		dd if=/dev/mmcblk0p4 of=$WORKDIR/$KERNELNAME
+		log "Kernel resides on /dev/mmcblk0p4"
+	elif [ $SEARCH = "duo4k" -o $SEARCH = "vuduo4k" ] ; then
+		dd if=/dev/mmcblk0p6 of=$WORKDIR/$KERNELNAME
+		log "Kernel resides on /dev/mmcblk0p6"
+	elif [ $SEARCH = "sf8008" -o $SEARCH = "sf8008m" -o $SEARCH = "ustym4kpro" -o $SEARCH = "gbtrio4k" -o $SEARCH = "gbip4k" -o $SEARCH = "viper4k" -o $SEARCH = "beyonwizv2" ] ; then
+		dd if=/dev/mmcblk0p12 of=$WORKDIR/$KERNELNAME
+		log "Kernel resides on /dev/mmcblk0p12"
+	elif [ $SEARCH = "hd60" -o $SEARCH = "hd61" ] ; then
+		$LIBDIR/enigma2/python/Plugins/Extensions/BackupSuite/findkerneldevice.sh
+		KERNEL=`readlink -n /dev/kernel`
+		log "Kernel resides on $KERNEL"
+		dd if=/dev/kernel of=$WORKDIR/$KERNELNAME > /dev/null 2>&1
+	else
+		python $LIBDIR/enigma2/python/Plugins/Extensions/BackupSuite/findkerneldevice.pyo
+		KERNEL=`cat /sys/firmware/devicetree/base/chosen/kerneldev`
+		KERNELNAME=${KERNEL:11:7}.bin
+		echo "$KERNELNAME = STARTUP_${KERNEL:17:1}"
+		log "$KERNELNAME = STARTUP_${KERNEL:17:1}"
+		dd if=/dev/kernel of=$WORKDIR/$KERNELNAME > /dev/null 2>&1
+	fi
 fi
 #############################  MAKING ROOT.UBI(FS) ############################
 $SHOW "message06a" 2>&1 | tee -a $LOGFILE		#Create: root.ubifs
@@ -398,28 +427,19 @@ else
 fi
 ############################ ASSEMBLING THE IMAGE #############################
 make_folders
-mv -f "$WORKDIR/$ROOTNAME" "$MAINDEST/$ROOTNAME"
-mv -f "$WORKDIR/$KERNELNAME" "$MAINDEST/$KERNELNAME"
-if [ $ACTION = "no" ] ; then
-	if [ $SHORTSOC = "hisi" ] ; then
-		echo "Rename unforce_$SEARCH.txt to force_$SEARCH.txt and move it to the root of your usb-stick" > "$MAINDEST/unforce_$SEARCH.txt";
-	elif [ $SHOWNAME = "vuplus" ] ; then
-		echo "rename this file to 'force.update' to force an update without confirmation" > "$MAINDEST/reboot.update"
-	else
-		echo "rename this file to 'force' to force an update without confirmation" > "$MAINDEST/noforce";
-	fi
-elif [ $ACTION = "yes" ] ; then
-	if [ $SHORTSOC = "hisi" ] ; then
-		echo "Rename force_$SEARCH.txt to unforce_$SEARCH.txt and move it to the root of your usb-stick" > "$MAINDEST/force_$SEARCH.txt";
-	elif [ $SHOWNAME = "vuplus" ] ; then
-		echo "rename this file to 'reboot.update' to not force an update without confirmation" > "$MAINDEST/force.update"
-	else
-		echo "rename this file to 'noforce' to not force an update without confirmation" > "$MAINDEST/force";
-	fi
+mv "$WORKDIR/$ROOTNAME" "$MAINDEST/$ROOTNAME"
+mv "$WORKDIR/$KERNELNAME" "$MAINDEST/$KERNELNAME"
+if [ $ACTION = "noforce" ] ; then
+	echo "rename this file to 'force' to force an update without confirmation" > "$MAINDEST/noforce";
+elif [ $ACTION = "reboot" ] ; then
+	echo "rename this file to 'force.update' to force an update without confirmation" > "$MAINDEST/reboot.update"
+elif [ $ACTION = "force" ] ; then
+	echo "rename this file to 'force.update' to be able to flash this backup" > "$MAINDEST/noforce.update"
+	echo "Rename the file in the folder /vuplus/$SEARCH/noforce.update to /vuplus/$SEARCH/force.update to flash this image"
 fi
 image_version > "$MAINDEST/imageversion"
-if [ $PLATFORM = "zgemmahisi3798mv200" -o $PLATFORM = "zgemmahisi3716mv430" ] ; then
-	log "Zgemma HiSilicon found, we need to copy more files for flashing later!"
+if [ $SEARCH = "h9" -o $SEARCH = "h9combo" -o $SEARCH = "i55plus" -o $SEARCH = "h10" ] ; then
+	log "Zgemma hisil-3798mv200 found, we need to copy more files for flashing later!"
 	dd if=/dev/mtd0 of=$MAINDEST/fastboot.bin > /dev/null 2>&1
 	dd if=/dev/mtd1 of=$MAINDEST/bootargs.bin > /dev/null 2>&1
 	cp -r "$MAINDEST/fastboot.bin" "$MEDIA/zgemma/fastboot.bin" > /dev/null 2>&1
@@ -430,7 +450,7 @@ fi
 if  [ $HARDDISK != 1 ]; then
 	mkdir -p "$EXTRA"
 	echo "Created directory  = $EXTRA" >> $LOGFILE
-	cp -r "$MAINDEST" "$EXTRA" 	#copy the made backup to images
+	cp -r "$MAINDEST" "$EXTRA" 	#copy the made back-up to images
 fi
 if [ -f "$MAINDEST/$ROOTNAME" -a -f "$MAINDEST/$KERNELNAME" ] ; then
 		backup_made
@@ -503,18 +523,16 @@ echo "--------------------------------------------" >> $LOGFILE
 opkg list-installed >> $LOGFILE
 ######################## COPY LOGFILE TO MAINDESTINATION ######################
 echo -n $WHITE
-cp -f $LOGFILE "$MAINDEST"
+cp $LOGFILE "$MAINDEST"
 if  [ $HARDDISK != 1 ]; then
-	cp -f $LOGFILE "$MEDIA$EXTR1"
-	if [ -f "$MEDIA$EXTR1$FOLDER/imageversion" ]; then
-		mv -f "$MEDIA$EXTR1$FOLDER"/imageversion "$MEDIA$EXTR1"
-	fi
+	cp $LOGFILE "$MEDIA$EXTR1"
+	mv "$MEDIA$EXTR1$FOLDER"/imageversion "$MEDIA$EXTR1"
 else
 	mv -f "$MAINDEST"/BackupSuite.log "$MEDIA$EXTR1"
-	cp -f "$MAINDEST"/imageversion "$MEDIA$EXTR1"
+	cp "$MAINDEST"/imageversion "$MEDIA$EXTR1"
 fi
 if [ "$TARGET" != "XX" ] ; then
-	cp -f $LOGFILE "$TARGET$FOLDER"
+	cp $LOGFILE "$TARGET$FOLDER"
 fi
 exit
 ############### END OF PROGRAMM ################
